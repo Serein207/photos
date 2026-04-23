@@ -1,6 +1,26 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(photos VERSION 0.1 LANGUAGES CXX)
+# Parse version from git tag (format: v1.0.0)
+execute_process(
+    COMMAND git describe --tags --abbrev=0 --match "v*"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_TAG
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(GIT_TAG MATCHES "^v([0-9]+)\\.([0-9]+)\\.([0-9]+)")
+    set(VERSION_MAJOR ${CMAKE_MATCH_1})
+    set(VERSION_MINOR ${CMAKE_MATCH_2})
+    set(VERSION_PATCH ${CMAKE_MATCH_3})
+else()
+    set(VERSION_MAJOR 0)
+    set(VERSION_MINOR 1)
+    set(VERSION_PATCH 0)
+endif()
+set(APP_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
+
+project(photos VERSION ${APP_VERSION} LANGUAGES CXX)
+message(STATUS "App version: ${APP_VERSION}")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -75,13 +95,41 @@ endif()
 # App executable
 qt_standard_project_setup(REQUIRES 6.10)
 if(WIN32)
-    qt_add_executable(photos src/main.cpp assets/AppIcon.rc)
+    configure_file(
+        ${CMAKE_SOURCE_DIR}/.cmake/AppIcon.rc.in
+        ${CMAKE_SOURCE_DIR}/assets/AppIcon.rc
+    )
+    qt_add_executable(photos src/main.cpp assets/AppIcon.rc assets/app.manifest)
+
+    # Copy ONNX models and dict next to the executable after build
+    set(AI_ASSETS
+        assets/PP-OCRv5_server_det_infer.onnx
+        assets/PP-OCRv5_server_rec_infer.onnx
+        assets/ppocrv5_dict.txt
+    )
+    add_custom_command(TARGET photos POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:photos>/assets"
+        VERBATIM
+    )
+    foreach(_asset ${AI_ASSETS})
+        add_custom_command(TARGET photos POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_SOURCE_DIR}/${_asset}"
+                "$<TARGET_FILE_DIR:photos>/assets/"
+            VERBATIM
+        )
+    endforeach()
 else()
     qt_add_executable(photos src/main.cpp assets/AppIcon.icns)
     set_target_properties(photos PROPERTIES
         MACOSX_BUNDLE TRUE
-        MACOSX_BUNDLE_BUNDLE_NAME "photos"
+        MACOSX_BUNDLE_BUNDLE_NAME "Photos"
         MACOSX_BUNDLE_ICON_FILE AppIcon
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.serein207.photos"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${APP_VERSION}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${APP_VERSION}"
+        MACOSX_BUNDLE_COPYRIGHT "Copyright (C) 2026 Serein207. All rights reserved."
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/.cmake/Info.plist.in"
     )
     set_source_files_properties(assets/AppIcon.icns PROPERTIES
         MACOSX_PACKAGE_LOCATION "Resources"

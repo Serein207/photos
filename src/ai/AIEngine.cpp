@@ -8,8 +8,13 @@ AIEngine::AIEngine(const std::string& model_path) {
         Ort::SessionOptions session_options;
         session_options.SetIntraOpNumThreads(1);
         session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
-        
+
+#ifdef _WIN32
+        std::wstring wide_path(model_path.begin(), model_path.end());
+        session_ = std::make_unique<Ort::Session>(*env_, wide_path.c_str(), session_options);
+#else
         session_ = std::make_unique<Ort::Session>(*env_, model_path.c_str(), session_options);
+#endif
     } catch (const Ort::Exception& e) {
         std::cerr << "ONNX Runtime initialization failed: " << e.what() << std::endl;
     }

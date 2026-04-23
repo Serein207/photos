@@ -91,7 +91,7 @@ jobs:
         run: choco install opencv --version=4.9.0 -y
 
       - name: Set OpenCV_DIR
-        run: echo "OpenCV_DIR=C:\tools\opencv\build" >> $env:GITHUB_ENV
+        run: echo "OpenCV_DIR=C:\tools\opencv\build\x64\vc16\lib" >> $env:GITHUB_ENV
 
       - name: Cache Inkscape
         id: cache-inkscape
@@ -107,29 +107,20 @@ jobs:
       - name: Build icon (PNG sizes + .ico)
         shell: pwsh
         run: |
-          $inkscape = "C:\Program Files\Inkscape\bin\inkscape.exe"
-          if (-not (Test-Path $inkscape)) {
-            Write-Error "Inkscape not found at $inkscape"
-            exit 1
+          $inkscape = Get-Command inkscape -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+          if (-not $inkscape) {
+            $inkscape = Get-ChildItem "C:\Program Files\Inkscape" -Recurse -Filter inkscape.exe -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
           }
+          if (-not $inkscape) { Write-Error "Inkscape not found"; exit 1 }
+
           $root = (Get-Location).Path
-          $svg = "$root\assets\AppIcon.svg"
-
-          # Verify SVG is a real file, not a Git LFS pointer
-          $head = Get-Content $svg -TotalCount 1
-          Write-Host "SVG first line: $head"
-          if ($head -notmatch '<\?xml|<svg') {
-            Write-Error "AppIcon.svg looks like a Git LFS pointer, not a real SVG"
-            exit 1
-          }
-
+          $svg  = "$root\assets\AppIcon.svg"
           New-Item -ItemType Directory -Force -Path "$root\assets\AppIcon.iconset" | Out-Null
+
           foreach ($size in @(16, 32, 48, 64, 128, 256)) {
             $out = "$root\assets\AppIcon.iconset\icon_$size.png"
-            Write-Host "Rendering ${size}x${size}..."
-            & $inkscape $svg --export-type=png --export-width=$size --export-height=$size --export-filename="$out" 2>&1
-            Write-Host "Exit code: $LASTEXITCODE"
-            if (-not (Test-Path $out)) { Write-Error "Failed to generate $out"; exit 1 }
+            & $inkscape -w $size -h $size $svg -o $out --export-overwrite 2>&1 | Out-Null
+            if (-not (Test-Path $out)) { Write-Error "Failed: $out"; exit 1 }
           }
           magick "$root\assets\AppIcon.iconset\icon_16.png" `
                  "$root\assets\AppIcon.iconset\icon_32.png" `
@@ -183,7 +174,7 @@ jobs:
           mkdir staging
           copy build\Release\photos.exe staging\
           # windeployqt handles Qt DLLs + QML plugins
-          & "$env:Qt6_DIR\bin\windeployqt.exe" --qmldir . --release staging\photos.exe
+          & "$env:QT_ROOT_DIR\bin\windeployqt.exe" --qmldir . --release staging\photos.exe
           # OpenCV and ONNXRuntime DLLs are copied by CMake post-build into build\Release\
           copy "build\Release\opencv_world*.dll" staging\ 2>$null
           copy "build\Release\onnxruntime*.dll" staging\ 2>$null

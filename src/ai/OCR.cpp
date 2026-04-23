@@ -17,9 +17,14 @@ OCRPipeline::OCRPipeline() : env(ORT_LOGGING_LEVEL_WARNING, "OCR") {
         QString detPath = QDir(appDir).filePath("../assets/PP-OCRv5_server_det_infer.onnx");
         QString recPath = QDir(appDir).filePath("../assets/PP-OCRv5_server_rec_infer.onnx");
 
+#ifdef _WIN32
+        detSession = std::make_unique<Ort::Session>(env, detPath.toStdWString().c_str(), sessionOptions);
+        recSession = std::make_unique<Ort::Session>(env, recPath.toStdWString().c_str(), sessionOptions);
+#else
         detSession = std::make_unique<Ort::Session>(env, detPath.toStdString().c_str(), sessionOptions);
         recSession = std::make_unique<Ort::Session>(env, recPath.toStdString().c_str(), sessionOptions);
-        
+#endif
+
         QString dictPath = QDir(appDir).filePath("../assets/ppocrv5_dict.txt");
         
         QFile dictFile(dictPath);

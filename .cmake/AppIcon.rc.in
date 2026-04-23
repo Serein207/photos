@@ -1,0 +1,29 @@
+1 VERSIONINFO
+ FILEVERSION @VERSION_MAJOR@,@VERSION_MINOR@,@VERSION_PATCH@,0
+ PRODUCTVERSION @VERSION_MAJOR@,@VERSION_MINOR@,@VERSION_PATCH@,0
+ FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0x0L
+ FILEOS 0x40004L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404b0"
+        BEGIN
+            VALUE "FileDescription", "Photos"
+            VALUE "FileVersion", "@VERSION_MAJOR@.@VERSION_MINOR@.@VERSION_PATCH@.0"
+            VALUE "InternalName", "photos"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Serein207. All rights reserved."
+            VALUE "OriginalFilename", "photos.exe"
+            VALUE "ProductName", "Photos"
+            VALUE "ProductVersion", "@VERSION_MAJOR@.@VERSION_MINOR@.@VERSION_PATCH@.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x804, 1200
+    END
+END
+
+IDI_ICON1 ICON "assets/AppIcon.ico"
