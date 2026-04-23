@@ -1,0 +1,154 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Homebrew packages
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: brew-${{ runner.os }}-opencv-librsvg
+          restore-keys: brew-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: brew install opencv librsvg
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.3'
+          host: mac
+          target: desktop
+          arch: clang_64
+          cache: true
+
+      - name: Build icon
+        run: bash scripts/build-icon.sh
+
+      - name: Cache CMake build (macOS)
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: cmake-macos-${{ hashFiles('CMakeLists.txt', 'src/**') }}
+          restore-keys: cmake-macos-
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Package
+        run: |
+          # macdeployqt handles Qt frameworks + QML plugins
+          $Qt6_DIR/bin/macdeployqt build/photos.app -qmldir=. -dmg
+          mv build/photos.dmg photos-${{ github.ref_name }}-macos.dmg
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: photos-${{ github.ref_name }}-macos.dmg
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.3'
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: Install OpenCV
+        run: |
+          choco install opencv --version=4.9.0 -y
+          echo "OpenCV_DIR=C:\tools\opencv\build" >> $env:GITHUB_ENV
+
+      - name: Install librsvg
+        run: choco install librsvg -y
+
+      - name: Build icon (PNG sizes + .ico)
+        shell: bash
+        run: |
+          mkdir -p assets/AppIcon.iconset
+          for size in 16 32 48 64 128 256; do
+            rsvg-convert -w $size -h $size assets/AppIcon.svg -o assets/AppIcon.iconset/icon_${size}.png
+          done
+          magick assets/AppIcon.iconset/icon_16.png \
+                 assets/AppIcon.iconset/icon_32.png \
+                 assets/AppIcon.iconset/icon_48.png \
+                 assets/AppIcon.iconset/icon_256.png \
+                 assets/AppIcon.ico
+
+      - name: Cache ONNXRuntime
+        id: cache-onnx
+        uses: actions/cache@v4
+        with:
+          path: onnxruntime
+          key: onnxruntime-win-x64-1.20.1
+
+      - name: Install ONNXRuntime
+        if: steps.cache-onnx.outputs.cache-hit != 'true'
+        run: |
+          $ver = "1.20.1"
+          $url = "https://github.com/microsoft/onnxruntime/releases/download/v$ver/onnxruntime-win-x64-$ver.zip"
+          Invoke-WebRequest $url -OutFile onnxruntime.zip
+          Expand-Archive onnxruntime.zip -DestinationPath onnxruntime
+          echo "ONNXRUNTIME_ROOT=$pwd\onnxruntime\onnxruntime-win-x64-$ver" >> $env:GITHUB_ENV
+
+      - name: Set ONNXRUNTIME_ROOT
+        run: |
+          $ver = "1.20.1"
+          echo "ONNXRUNTIME_ROOT=$pwd\onnxruntime\onnxruntime-win-x64-$ver" >> $env:GITHUB_ENV
+
+      - name: Cache CMake build (Windows)
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: cmake-windows-${{ hashFiles('CMakeLists.txt', 'src/**') }}
+          restore-keys: cmake-windows-
+
+      - name: Configure
+        run: |
+          cmake -B build `
+            -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DOpenCV_DIR="$env:OpenCV_DIR" `
+            -DONNXRUNTIME_INCLUDE_DIRS="$env:ONNXRUNTIME_ROOT\include" `
+            -DONNXRUNTIME_LIBS="$env:ONNXRUNTIME_ROOT\lib\onnxruntime.lib"
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Package
+        run: |
+          mkdir staging
+          copy build\Release\photos.exe staging\
+          # windeployqt handles Qt DLLs + QML plugins
+          & "$env:Qt6_DIR\bin\windeployqt.exe" --qmldir . --release staging\photos.exe
+          # OpenCV and ONNXRuntime DLLs are copied by CMake post-build into build\Release\
+          copy "build\Release\opencv_world*.dll" staging\ 2>$null
+          copy "build\Release\onnxruntime*.dll" staging\ 2>$null
+          Compress-Archive -Path staging\* -DestinationPath photos-${{ github.ref_name }}-windows.zip
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: photos-${{ github.ref_name }}-windows.zip
