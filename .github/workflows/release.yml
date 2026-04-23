@@ -173,6 +173,7 @@ jobs:
         run: |
           mkdir staging
           copy build\Release\photos.exe staging\
+          copy build\Release\assets staging\assets -Recurse -Force
           # windeployqt handles Qt DLLs + QML plugins
           & "$env:QT_ROOT_DIR\bin\windeployqt.exe" --qmldir . --release staging\photos.exe
           # OpenCV and ONNXRuntime DLLs are copied by CMake post-build into build\Release\
