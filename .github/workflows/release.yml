@@ -14,16 +14,18 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Cache Homebrew packages
         uses: actions/cache@v4
         with:
           path: ~/Library/Caches/Homebrew
-          key: brew-${{ runner.os }}-opencv-librsvg
+          key: brew-${{ runner.os }}-opencv-librsvg-onnxruntime
           restore-keys: brew-${{ runner.os }}-
 
       - name: Install dependencies
-        run: brew install opencv librsvg
+        run: brew install opencv librsvg onnxruntime
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -45,15 +47,14 @@ jobs:
           restore-keys: cmake-macos-
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
 
       - name: Build
         run: cmake --build build --config Release --parallel
 
       - name: Package
         run: |
-          # macdeployqt handles Qt frameworks + QML plugins
-          $Qt6_DIR/bin/macdeployqt build/photos.app -qmldir=. -dmg
+          $QT_ROOT_DIR/bin/macdeployqt build/photos.app -qmldir=. -dmg
           mv build/photos.dmg photos-${{ github.ref_name }}-macos.dmg
 
       - name: Upload to release
@@ -66,6 +67,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -76,26 +79,63 @@ jobs:
           arch: win64_msvc2022_64
           cache: true
 
-      - name: Install OpenCV
-        run: |
-          choco install opencv --version=4.9.0 -y
-          echo "OpenCV_DIR=C:\tools\opencv\build" >> $env:GITHUB_ENV
+      - name: Cache OpenCV
+        id: cache-opencv
+        uses: actions/cache@v4
+        with:
+          path: C:\tools\opencv
+          key: opencv-win-4.9.0
 
-      - name: Install librsvg
-        run: choco install librsvg -y
+      - name: Install OpenCV
+        if: steps.cache-opencv.outputs.cache-hit != 'true'
+        run: choco install opencv --version=4.9.0 -y
+
+      - name: Set OpenCV_DIR
+        run: echo "OpenCV_DIR=C:\tools\opencv\build" >> $env:GITHUB_ENV
+
+      - name: Cache Inkscape
+        id: cache-inkscape
+        uses: actions/cache@v4
+        with:
+          path: C:\Program Files\Inkscape
+          key: inkscape-win-1.4
+
+      - name: Install Inkscape
+        if: steps.cache-inkscape.outputs.cache-hit != 'true'
+        run: choco install inkscape -y
 
       - name: Build icon (PNG sizes + .ico)
-        shell: bash
+        shell: pwsh
         run: |
-          mkdir -p assets/AppIcon.iconset
-          for size in 16 32 48 64 128 256; do
-            rsvg-convert -w $size -h $size assets/AppIcon.svg -o assets/AppIcon.iconset/icon_${size}.png
-          done
-          magick assets/AppIcon.iconset/icon_16.png \
-                 assets/AppIcon.iconset/icon_32.png \
-                 assets/AppIcon.iconset/icon_48.png \
-                 assets/AppIcon.iconset/icon_256.png \
-                 assets/AppIcon.ico
+          $inkscape = "C:\Program Files\Inkscape\bin\inkscape.exe"
+          if (-not (Test-Path $inkscape)) {
+            Write-Error "Inkscape not found at $inkscape"
+            exit 1
+          }
+          $root = (Get-Location).Path
+          $svg = "$root\assets\AppIcon.svg"
+
+          # Verify SVG is a real file, not a Git LFS pointer
+          $head = Get-Content $svg -TotalCount 1
+          Write-Host "SVG first line: $head"
+          if ($head -notmatch '<\?xml|<svg') {
+            Write-Error "AppIcon.svg looks like a Git LFS pointer, not a real SVG"
+            exit 1
+          }
+
+          New-Item -ItemType Directory -Force -Path "$root\assets\AppIcon.iconset" | Out-Null
+          foreach ($size in @(16, 32, 48, 64, 128, 256)) {
+            $out = "$root\assets\AppIcon.iconset\icon_$size.png"
+            Write-Host "Rendering ${size}x${size}..."
+            & $inkscape $svg --export-type=png --export-width=$size --export-height=$size --export-filename="$out" 2>&1
+            Write-Host "Exit code: $LASTEXITCODE"
+            if (-not (Test-Path $out)) { Write-Error "Failed to generate $out"; exit 1 }
+          }
+          magick "$root\assets\AppIcon.iconset\icon_16.png" `
+                 "$root\assets\AppIcon.iconset\icon_32.png" `
+                 "$root\assets\AppIcon.iconset\icon_48.png" `
+                 "$root\assets\AppIcon.iconset\icon_256.png" `
+                 "$root\assets\AppIcon.ico"
 
       - name: Cache ONNXRuntime
         id: cache-onnx
@@ -130,6 +170,7 @@ jobs:
           cmake -B build `
             -G "Visual Studio 17 2022" -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
+            -DBUILD_TESTING=OFF `
             -DOpenCV_DIR="$env:OpenCV_DIR" `
             -DONNXRUNTIME_INCLUDE_DIRS="$env:ONNXRUNTIME_ROOT\include" `
             -DONNXRUNTIME_LIBS="$env:ONNXRUNTIME_ROOT\lib\onnxruntime.lib"
