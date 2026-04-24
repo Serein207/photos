@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 
+# Add .cmake directory to module path
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/.cmake")
+
 # Parse version from git tag (format: v1.0.0)
 execute_process(
     COMMAND git describe --tags --abbrev=0 --match "v*"

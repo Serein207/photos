@@ -162,9 +162,7 @@ jobs:
             -G "Visual Studio 17 2022" -A x64 `
             -DCMAKE_BUILD_TYPE=Release `
             -DBUILD_TESTING=OFF `
-            -DOpenCV_DIR="$env:OpenCV_DIR" `
-            -DONNXRUNTIME_INCLUDE_DIRS="$env:ONNXRUNTIME_ROOT\include" `
-            -DONNXRUNTIME_LIBS="$env:ONNXRUNTIME_ROOT\lib\onnxruntime.lib"
+            -DOpenCV_DIR="$env:OpenCV_DIR"
 
       - name: Build
         run: cmake --build build --config Release --parallel
