@@ -54,13 +54,13 @@ jobs:
 
       - name: Package
         run: |
-          $QT_ROOT_DIR/bin/macdeployqt build/photos.app -qmldir=. -dmg
-          mv build/photos.dmg photos-${{ github.ref_name }}-macos.dmg
+          $QT_ROOT_DIR/bin/macdeployqt build/photos.app -qmldir=.
+          ditto -c -k --sequesterRsrc --keepParent build/photos.app photos-${{ github.ref_name }}-macos.zip
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
-          files: photos-${{ github.ref_name }}-macos.dmg
+          files: photos-${{ github.ref_name }}-macos.zip
 
   build-windows:
     name: Build Windows
