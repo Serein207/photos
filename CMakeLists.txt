@@ -210,27 +210,32 @@ target_link_libraries(photos PRIVATE Qt6::Quick Qt6::QuickControls2 ImageIOLib)
 # Tests
 if(BUILD_TESTING)
     add_executable(test_ImageEditing tests/test_ImageEditing.cpp)
+    set_target_properties(test_ImageEditing PROPERTIES AUTOMOC ON)
     target_link_libraries(test_ImageEditing PRIVATE ImageIOLib Qt6::Test Qt6::Core Qt6::Gui ${OpenCV_LIBS})
     add_test(NAME test_ImageEditing COMMAND test_ImageEditing)
+
     add_executable(test_ImageIO tests/test_ImageIO.cpp)
+    set_target_properties(test_ImageIO PROPERTIES AUTOMOC ON)
     target_link_libraries(test_ImageIO PRIVATE ImageIOLib Qt6::Test Qt6::Core Qt6::Gui)
     add_test(NAME test_ImageIO COMMAND test_ImageIO)
 
-    # Assuming GTest is available for testing
-    find_package(GTest REQUIRED)
     add_executable(test_AIEngine tests/test_AIEngine.cpp)
-    target_link_libraries(test_AIEngine PRIVATE AIEngineLib GTest::gtest GTest::gtest_main)
+    set_target_properties(test_AIEngine PROPERTIES AUTOMOC ON)
+    target_link_libraries(test_AIEngine PRIVATE AIEngineLib Qt6::Test Qt6::Core)
     add_test(NAME test_AIEngine COMMAND test_AIEngine)
 
     add_executable(test_OCR tests/test_OCR.cpp)
-    target_link_libraries(test_OCR PRIVATE AIEngineLib GTest::gtest GTest::gtest_main Qt6::Core)
+    set_target_properties(test_OCR PROPERTIES AUTOMOC ON)
+    target_link_libraries(test_OCR PRIVATE AIEngineLib Qt6::Test Qt6::Core)
     add_test(NAME test_OCR COMMAND test_OCR)
 
     add_executable(test_SubjectExtraction tests/test_SubjectExtraction.cpp)
+    set_target_properties(test_SubjectExtraction PROPERTIES AUTOMOC ON)
     target_link_libraries(test_SubjectExtraction PRIVATE AIEngineLib Qt6::Test Qt6::Core Qt6::Gui)
     add_test(NAME test_SubjectExtraction COMMAND test_SubjectExtraction)
 
     add_executable(test_TextLayoutAnalyzer tests/test_TextLayoutAnalyzer.cpp)
-    target_link_libraries(test_TextLayoutAnalyzer PRIVATE AIEngineLib GTest::gtest GTest::gtest_main Qt6::Core)
+    set_target_properties(test_TextLayoutAnalyzer PROPERTIES AUTOMOC ON)
+    target_link_libraries(test_TextLayoutAnalyzer PRIVATE AIEngineLib Qt6::Test Qt6::Core)
     add_test(NAME test_TextLayoutAnalyzer COMMAND test_TextLayoutAnalyzer)
 endif()
