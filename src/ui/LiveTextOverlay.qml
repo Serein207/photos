@@ -31,7 +31,7 @@ Item {
         if (ocrModel) ocrModel.modelReset.connect(refreshCharBoxes)
     }
 
-    property var lineBBoxes: []   // [{minX, minY, maxX, maxY}] in image coords, one per line
+    property var lineBBoxes: []   // [{minX, minY, maxX, maxY, angle}] in image coords, one per line
 
     onCharBoxesChanged: {
         const map = new Array(charBoxes.length)
@@ -47,26 +47,31 @@ Item {
         lineStartMap = starts
         lineEndMap = ends
 
-        // Pre-compute per-line bounding boxes for fast hover hit-testing
         const bboxes = []
         for (const li in starts) {
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+            let sumSin = 0, sumCos = 0, count = 0
             for (let i = starts[li]; i <= ends[li]; ++i) {
                 const b = charBoxes[i]
-                if (b.cx - b.w / 2 < minX) minX = b.cx - b.w / 2
-                if (b.cx + b.w / 2 > maxX) maxX = b.cx + b.w / 2
-                if (b.cy - b.h / 2 < minY) minY = b.cy - b.h / 2
-                if (b.cy + b.h / 2 > maxY) maxY = b.cy + b.h / 2
+                const halfW = (b.w || b.bh || 8) / 2
+                const halfH = (b.h || b.bh || 8) / 2
+                if (b.cx - halfW < minX) minX = b.cx - halfW
+                if (b.cx + halfW > maxX) maxX = b.cx + halfW
+                if (b.cy - halfH < minY) minY = b.cy - halfH
+                if (b.cy + halfH > maxY) maxY = b.cy + halfH
+                const rad = (b.angle !== undefined ? b.angle : 0) * Math.PI / 180
+                sumSin += Math.sin(rad)
+                sumCos += Math.cos(rad)
+                count++
             }
-            // Expand X by half the average inter-char spacing so the hit area
-            // covers the full first/last character cell, not just center-to-center.
             const charCount = ends[li] - starts[li] + 1
             if (charCount > 1) {
                 const halfSlot = (maxX - minX) / (charCount - 1) / 2
                 minX -= halfSlot
                 maxX += halfSlot
             }
-            bboxes.push({minX, minY, maxX, maxY})
+            const avgAngle = count ? Math.atan2(sumSin, sumCos) * 180 / Math.PI : 0
+            bboxes.push({minX, minY, maxX, maxY, angle: avgAngle})
         }
         lineBBoxes = bboxes
 
@@ -168,31 +173,30 @@ Item {
                 const lineS = starts[lineIdx]
                 const lineE = ends[lineIdx]
 
-                let minY = Infinity, maxY = -Infinity
+                // get per-line rotation angle
+                const lineAngle = (liveTextOverlay.lineBBoxes[lineIdx]
+                                   && liveTextOverlay.lineBBoxes[lineIdx].angle !== undefined)
+                                   ? liveTextOverlay.lineBBoxes[lineIdx].angle : 0
 
-                // Y extent: full line height for uniform row
+                let minY = Infinity, maxY = -Infinity
                 for (let j = lineS; j <= lineE && j < boxes.length; ++j) {
                     const cb2 = boxes[j]
                     const cy2 = yOff + cb2.cy * scaleY
-                    const hh2 = (cb2.h * scaleY) / 2 * 1.4
+                    const hh2 = ((cb2.h || cb2.bh || 8) * scaleY) / 2 * 1.4
                     if (cy2 - hh2 < minY) minY = cy2 - hh2
                     if (cy2 + hh2 > maxY) maxY = cy2 + hh2
                 }
 
-                // X extent: midpoint-based so every char is fully covered.
-                // For the first char on a line: mirror the gap to its right.
-                // For the last char on a line: mirror the gap to its left.
                 const cxLo = xOff + boxes[rlo].cx * scaleX
                 let minX
                 if (rlo > lineS) {
                     const cxPrev = xOff + boxes[rlo - 1].cx * scaleX
                     minX = (cxPrev + cxLo) / 2
                 } else if (rlo < lineE) {
-                    // first char of line: mirror the gap to the right
                     const cxNext0 = xOff + boxes[rlo + 1].cx * scaleX
                     minX = cxLo - (cxNext0 - cxLo) / 2
                 } else {
-                    minX = cxLo - (boxes[rlo].w * scaleX) / 2
+                    minX = cxLo - ((boxes[rlo].w || boxes[rlo].bh || 8) * scaleX) / 2
                 }
 
                 const cxHi = xOff + boxes[rhi].cx * scaleX
@@ -201,15 +205,23 @@ Item {
                     const cxNext = xOff + boxes[rhi + 1].cx * scaleX
                     maxX = (cxHi + cxNext) / 2
                 } else if (rhi > lineS) {
-                    // last char of line: mirror the gap to the left
                     const cxPrev2 = xOff + boxes[rhi - 1].cx * scaleX
                     maxX = cxHi + (cxHi - cxPrev2) / 2
                 } else {
-                    maxX = cxHi + (boxes[rhi].w * scaleX) / 2
+                    maxX = cxHi + ((boxes[rhi].w || boxes[rhi].bh || 8) * scaleX) / 2
                 }
 
-                if (minX < maxX && minY < maxY)
-                    ctx.fillRect(minX, minY, maxX - minX, maxY - minY)
+                if (minX < maxX && minY < maxY) {
+                    const cx = (minX + maxX) / 2
+                    const cy = (minY + maxY) / 2
+                    ctx.save()
+                    ctx.translate(cx, cy)
+                    if (Math.abs(lineAngle) > 0.5)
+                        ctx.rotate(lineAngle * Math.PI / 180)
+                    ctx.fillRect(-(maxX - minX) / 2, -(maxY - minY) / 2,
+                                  maxX - minX, maxY - minY)
+                    ctx.restore()
+                }
             }
         }
     }

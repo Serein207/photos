@@ -2,16 +2,19 @@
 
 #include <opencv2/opencv.hpp>
 
+class SAMPipeline;
+
 class SubjectExtractionPipeline {
 public:
-    SubjectExtractionPipeline() = default;
-    ~SubjectExtractionPipeline() = default;
+    SubjectExtractionPipeline();
+    ~SubjectExtractionPipeline();
 
-    // Pipeline accepts an RGB image and returns an RGBA image where the background pixels have zero alpha value.
     cv::Mat extractSubject(const cv::Mat& rgbImage);
+    bool isSAMAvailable() const;
 
-    // Steps
-    cv::Mat preprocess(const cv::Mat& rgbImage);
-    cv::Mat inferMask(const cv::Mat& preprocessedImage);
+private:
+    static SAMPipeline& samPipeline();
+
+    cv::Mat extractWithGrabCut(const cv::Mat& rgbImage);
     cv::Mat applyMask(const cv::Mat& originalImage, const cv::Mat& mask);
 };

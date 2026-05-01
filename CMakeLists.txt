@@ -40,6 +40,7 @@ add_library(AIEngineLib
     src/ai/AIEngine.cpp
     src/ai/OCR.cpp
     src/ai/SubjectExtraction.cpp
+    src/ai/SAMPipeline.cpp
     src/ai/CTCCharBoxExtractor.cpp
     src/ai/TextLayoutAnalyzer.cpp
 )
@@ -74,6 +75,8 @@ if(WIN32)
     set(AI_ASSETS
         assets/PP-OCRv5_server_det_infer.onnx
         assets/PP-OCRv5_server_rec_infer.onnx
+        assets/mobile_sam_encoder.onnx
+        assets/mobile_sam_decoder.onnx
         assets/ppocrv5_dict.txt
     )
     add_custom_command(TARGET photos POST_BUILD
@@ -134,6 +137,8 @@ else()
     set(AI_ASSETS
         assets/PP-OCRv5_server_det_infer.onnx
         assets/PP-OCRv5_server_rec_infer.onnx
+        assets/mobile_sam_encoder.onnx
+        assets/mobile_sam_decoder.onnx
         assets/ppocrv5_dict.txt
     )
     target_sources(photos PRIVATE ${AI_ASSETS})
@@ -241,4 +246,9 @@ if(BUILD_TESTING)
     set_target_properties(test_TextLayoutAnalyzer PROPERTIES AUTOMOC ON)
     target_link_libraries(test_TextLayoutAnalyzer PRIVATE AIEngineLib Qt6::Test Qt6::Core)
     add_test(NAME test_TextLayoutAnalyzer COMMAND test_TextLayoutAnalyzer)
+
+    add_executable(test_Benchmark tests/test_Benchmark.cpp)
+    set_target_properties(test_Benchmark PROPERTIES AUTOMOC ON)
+    target_link_libraries(test_Benchmark PRIVATE AIEngineLib Qt6::Test Qt6::Core Qt6::Gui)
+    add_test(NAME test_Benchmark COMMAND test_Benchmark)
 endif()

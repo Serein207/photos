@@ -102,3 +102,23 @@ fix_cmake.py
 .cache
 .superpowers
 docs/superpowers
+skills
+lock.json
+
+# LaTeX build artifacts
+thesis/*.aux
+thesis/*.log
+thesis/*.out
+thesis/*.toc
+thesis/*.lof
+thesis/*.lot
+thesis/*.bbl
+thesis/*.blg
+thesis/*.synctex*
+thesis/*.fls
+thesis/*.fdb_latexmk
+thesis/main.pdf
+
+# LaTeX style files (from NJUPT-Bachelor template repo)
+thesis/gbt7714-numerical.bst
+thesis/gbt7714.sty

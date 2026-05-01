@@ -62,7 +62,8 @@ Desktop photo gallery app built with **C++17 + Qt6 Quick/QML**. Image processing
 | `src/ai/OCR.h/cpp` | Singleton OCR pipeline (text detection + recognition) |
 | `src/ai/CTCCharBoxExtractor.h/cpp` | CTC decoder producing per-character bounding boxes |
 | `src/ai/TextLayoutAnalyzer.h/cpp` | Groups char boxes into lines and words |
-| `src/ai/SubjectExtraction.h/cpp` | Background removal pipeline |
+| `src/ai/SubjectExtraction.h/cpp` | Background removal pipeline (MobileSAM + GrabCut fallback) |
+| `src/ai/SAMPipeline.h/cpp` | MobileSAM encoder+decoder ONNX inference |
 | `src/util/OcrCache.h/cpp` | SQLite-backed LRU cache for OCR results (keyed by image MD5) |
 
 ### QML UI structure
@@ -91,13 +92,40 @@ src/ui/
 ### Patterns to follow
 
 - **Async AI tasks**: heavy work runs in detached threads; results posted back to the UI thread via `QMetaObject::invokeMethod(..., Qt::QueuedConnection)`
-- **Thread safety**: OCR pipeline uses a mutex; use `QPointer` when capturing `this` across thread boundaries
+- **Thread safety**: both OCR and SAMPipeline use `std::mutex` to protect ONNX sessions from concurrent `Run()` calls. Use `QPointer` when capturing `this` across thread boundaries.
 - **File watching**: `QFileSystemWatcher` + debounce `QTimer` in `PhotoViewModel` — don't add direct watcher connections elsewhere
 - **Image caching**: processed images go through `AsyncImageProvider`; QML references them via custom URL scheme
 - **Conditional AI build**: wrap any code touching `AIEngineLib` in `#ifdef` / CMake `if(ONNXRuntime_FOUND)` guards
 - **OCR cache**: `OcrCache::instance()` is a thread-safe singleton; access via `PhotoViewModel` invokables from QML
 - **QML components**: reuse shared components from `src/ui/components/` — `BackButton`, `GhostIconButton`, `ZoomPill`, `Divider`, `CardContainer`
 - **Navigation**: `StackView` in `Main.qml` manages all screen transitions; screens signal `backClicked` / `settingsClicked` etc. upward
+
+### ONNX model conventions
+
+- Models stored in `assets/`, committed with Git LFS. Path at runtime: `QCoreApplication::applicationDirPath() + "../assets/<model>.onnx"`
+- MobileSAM uses two models (samexporter format): encoder (`mobile_sam_encoder.onnx`, NHWC [H,W,3] no batch dim) + decoder (`mobile_sam_decoder.onnx`)
+- Download HuggingFace models via hf-mirror.com when GFW blocks: `curl -L -o output "https://hf-mirror.com/<user>/<repo>/resolve/main/<file>"`
+- ONNX Runtime C++ `Run()` requires explicit output names — `(nullptr, 0)` is "0 outputs" not "all outputs"; query with `GetOutputNameAllocated(0, allocator)`
+- Encoder input name is queried dynamically (`GetInputNameAllocated`), decoder input names are fixed constants matching the samexporter spec
+- **SAMPipeline gotchas**: use single center-point prompt (9-point grid causes fg/bg swap); do NOT normalize encoder input (raw 0-255 float32); do NOT sigmoid decoder output (already probabilities); border fill must be gray `Scalar(128,128,128)`; auto-invert mask when center pixel <0.5; pick best of 3 masks by mean closest to 0.5 after clamp
+- **Tilted text highlighting**: LiveTextOverlay computes per-line average rotation angle from CharBox `RotatedRect.angle`, draws highlight rects with `ctx.translate`+`ctx.rotate` in Canvas 2D
+
+### Performance benchmark
+
+- `tests/test_Benchmark.cpp` — QtTest benchmark for image IO, editing, OCR pipeline, and subject extraction timing
+- Run: `cmake --build build --target test_Benchmark && ./build/test_Benchmark`
+
+### LaTeX / thesis
+
+- Template: `thesis/njupthesis.cls` adapted for macOS fonts (SimSun→Songti SC, SimHei→Heiti SC)
+- Missing TeX Live packages: `tlmgr --usermode install <pkg>`
+- Compile: `cd thesis && xelatex main && bibtex main && xelatex main && xelatex main`
+- Table format: 2 decimal places, unit in header (`/ ms`), no `n=` prefix
+
+### TikZ diagrams
+
+- No nested `\node` inside `\node` — use independent nodes via `(box.center -| col)` grid alignment
+- Max width ~12.5cm for A4 3cm margins; vertical flow preferred for pipelines
 
 ### App bundle (macOS)
 
